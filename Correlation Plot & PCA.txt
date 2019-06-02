@@ -1,0 +1,21 @@
+stock <- read.csv('bankingsector.csv')
+
+#Plot correlation plot
+stockdata <- stock[,7:17]# Keep only the numeric attributes
+library(GGally)
+ggcorr(stockdata,label = TRUE, 
+       label_alpha = TRUE)
+
+#Convert null values to zero
+stock_pca[is.na(stock_pca)] <- 0
+
+#Perform the PCA Analysis
+stock_pca <- prcomp(stock_pca, center = TRUE, scale. = TRUE)
+summary(stock_pca)
+
+library(devtools)
+install_github("vqv/ggbiplot")
+
+#Plot the PCA graph
+library(ggbiplot)
+ggbiplot(stock_pca, obs.scale = 2, var.scale = 2,labels=rownames(stock_pca))

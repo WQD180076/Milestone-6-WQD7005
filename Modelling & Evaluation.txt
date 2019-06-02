@@ -1,0 +1,109 @@
+
+stock <- read.csv('bankingsector.csv')
+
+#Plot correlation plot
+stockdata <- stock[,7:17]# Eliminate the non-numeric attributes
+library(GGally)
+ggcorr(stockdata,label = TRUE, 
+       label_alpha = TRUE)
+
+
+#Data trimming
+stockdata_model <- stock[,c(2,7:11,15:18)]
+#Convert null values to zero
+stockdata_model[is.na(stockdata_model)] <- 0
+
+#Modelling with Logistic Regression
+library(caTools)
+set.seed(88)
+split <- sample.split(stockdata_model$PriceLabel, SplitRatio = 0.75)
+#get training and test data
+train_lr <- subset(stockdata_model, split == TRUE)
+test_lr <- subset(stockdata_model, split == FALSE)
+
+#logistic regression model
+model_lr <- glm (PriceLabel ~ Name, data = train_lr,family = binomial)
+predict_lr <- predict(model_lr, newdata= test_lr[-10], type = 'response')
+
+#confusion matrix
+table(predict_lr>0.5,test_nb$PriceLabel)
+
+#Modelling with Naive Bayes
+set.seed(88)
+train_nb <- subset(stockdata_model, split == TRUE)
+test_nb <- subset(stockdata_model, split == FALSE)
+
+library(e1071)
+model_nb = naiveBayes(x = train_nb[-10],
+                        y = train_nb$PriceLabel)
+
+predict_nb = predict(model_nb, newdata = test_nb[-10])# Used to construct confusion matrix
+predict_nb2 = predict(model_nb, newdata = test_nb[-10],type='raw')#Used for ROC Curve
+# Making the Confusion Matrix
+table(test_nb[, 10], predict_nb)
+
+
+#Modelling with Decision Tree
+train_dt = subset(stockdata_model, split == TRUE)
+test_dt = subset(stockdata_model, split == FALSE)
+
+library(rpart)
+model_dt = rpart(formula = PriceLabel ~ .,
+                   data = train_dt)
+predict_dt2 = predict(model_dt, newdata = test_dt[-10],type='prob')#Used for ROC Curve
+predict_dt = predict(model_dt, newdata = test_dt[-10])# Used to construct confusion matrix
+# Making the Confusion Matrix
+table(test_dt[, 10], predict_dt)
+
+#Modelling with Random Forest
+train_rf = subset(stockdata_model, split == TRUE)
+test_rf = subset(stockdata_model, split == FALSE)
+library(randomForest)
+model_rf = randomForest(x = train_rf[-10],
+                          y = train_rf$PriceLabel,
+                          ntree = 500)
+predict_rf = predict(model_rf, newdata = test_rf[-10])# Used to construct confusion matrix
+predict_rf2 = predict(model_rf, newdata = test_rf[-10],type='prob')#Used for ROC Curve
+table(test_rf[, 10], predict_rf)
+
+#Plot the ROC Curve
+library(ROCR)
+rocpred_lr <- prediction(predict_lr, test_lr$PriceLabel)
+rocperf_lr <- performance(rocpred_lr, 'tpr','fpr')
+dd <- data.frame(FP = rocperf_lr@x.values[[1]], TP = rocperf_lr@y.values[[1]])
+
+rocpred_nb <- prediction(predict_nb2[,2], test_nb$PriceLabel)
+rocperf_nb <- performance(rocpred_nb, 'tpr','fpr')
+dd2 <- data.frame(FP = rocperf_nb@x.values[[1]], TP = rocperf_nb@y.values[[1]])
+
+rocpred_dt <- prediction(predict_dt2[,2], test_dt$PriceLabel)
+rocperf_dt <- performance(rocpred_dt, 'tpr','fpr')
+dd3 <- data.frame(FP = rocperf_dt@x.values[[1]], TP = rocperf_dt@y.values[[1]])
+
+rocpred_rf <- prediction(predict_rf2[,2], test_rf$PriceLabel)
+rocperf_rf <- performance(rocpred_rf, 'tpr','fpr')
+dd4 <- data.frame(FP = rocperf_rf@x.values[[1]], TP = rocperf_rf@y.values[[1]])
+
+library(ggplot2)
+ggplot() + 
+  geom_line(data = dd, aes(x = FP, y = TP, color = 'Logistic Regression')) +
+  geom_line(data = dd2, aes(x = FP, y = TP, color = 'Naive Bayes')) +
+  geom_line(data = dd3, aes(x = FP, y = TP, color = 'Decision Tree')) +
+  geom_line(data = dd, aes(x = FP, y = TP, color = 'Random Forest')) +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1)) +
+  ggtitle('ROC Curve') + 
+  labs(x = 'False Positive Rate', y = 'True Positive Rate') 
+  
+#Area Under Curve
+auc <- rbind(performance(rocpred_lr, measure = 'auc')@y.values[[1]],
+             performance(rocpred_nb, measure = 'auc')@y.values[[1]],
+             performance(rocpred_dt, measure = 'auc')@y.values[[1]],
+             performance(rocpred_rf, measure = 'auc')@y.values[[1]])
+          
+rownames(auc) <- (c('Logistic Regression','Naive Bayes'
+                    ,'Decision Tree','Random Forest'))
+colnames(auc) <- 'Area Under ROC Curve'
+round(auc, 4)
+
+
+
